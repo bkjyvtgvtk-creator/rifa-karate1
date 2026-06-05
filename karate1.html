@@ -1,0 +1,167 @@
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control de Rifa de 800 Números</title>
+    <style>
+        * { box-sizing: border-box; font-family: Arial, sans-serif; }
+        body { background-color: #f4f6f9; margin: 0; padding: 15px; }
+        h1, h2 { text-align: center; color: #333; }
+        .panel-control { background: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .flex-inputs { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+        .flex-inputs input, .flex-inputs button { flex: 1; min-width: 140px; padding: 10px; border: 1px solid #ccc; border-radius: 5px; }
+        button { background-color: #007bff; color: white; border: none; cursor: pointer; font-weight: bold; }
+        button:hover { background-color: #0056b3; }
+        .btn-excel { background-color: #28a745; }
+        .Estadisticas { display: flex; justify-content: space-around; background: #e9ecef; padding: 10px; border-radius: 5px; font-weight: bold; }
+        .grid-numeros { display: grid; grid-template-columns: repeat(auto-fill, minmax(55px, 1fr)); gap: 5px; margin-top: 20px; max-height: 400px; overflow-y: auto; padding: 5px; border: 1px solid #ddd; background: white; }
+        .numero-slot { padding: 12px 5px; text-align: center; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; background-color: #fff; }
+        .numero-slot.vendido { background-color: #ffeb3b; color: #000; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; padding: 10px; }
+        .modal-content { background: white; padding: 20px; border-radius: 8px; width: 100%; max-width: 400px; }
+        .modal-content input { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ccc; border-radius: 5px; }
+        .btn-eliminar { background-color: #dc3545; margin-top: 5px; }
+    </style>
+</head>
+<body>
+
+    <h1>🎟️ App Rifa (01 - 800)</h1>
+
+    <div class="panel-control">
+        <h3>📅 Configuración del Sorteo</h3>
+        <div class="flex-inputs">
+            <input type="date" id="fechaSorteo" onchange="guardarFecha()">
+            <button class="btn-excel" onclick="exportarCSV()">📊 Descargar Base de Datos (CSV)</button>
+            <button onclick="realizarSorteo()" style="background-color: #17a2b8;">🎲 Realizar Sorteo</button>
+        </div>
+    </div>
+
+    <div class="panel-control">
+        <div class="Estadisticas">
+            <div>Vendidos: <span id="txtVendidos">0</span></div>
+            <div>Disponibles: <span id="txtDisponibles">800</span></div>
+        </div>
+    </div>
+
+    <h2>Seleccione un Número</h2>
+    <div class="grid-numeros" id="gridNumeros"></div>
+
+    <div class="modal" id="modalVenta">
+        <div class="modal-content">
+            <h3 id="modalTitulo">Gestionar Número</h3>
+            <input type="text" id="compraNombre" placeholder="Nombre">
+            <input type="text" id="compraApellido" placeholder="Apellido">
+            <input type="number" id="compraValor" placeholder="Valor ($)">
+            <button onclick="guardarVenta()" style="width: 100%;">Guardar Datos</button>
+            <button class="btn-eliminar" id="btnLiberar" onclick="liberarNumero()" style="width: 100%;">Liberar Número</button>
+            <button onclick="cerrarModal()" style="width: 100%; background-color: #6c757d; margin-top: 5px;">Cerrar</button>
+        </div>
+    </div>
+
+    <script>
+        let rifaData = {};
+        let numeroSeleccionado = null;
+
+        function initApp() {
+            const copiaLocal = localStorage.getItem('rifa_800_data');
+            if(copiaLocal) {
+                rifaData = JSON.parse(copiaLocal);
+            } else {
+                for(let i = 1; i <= 800; i++) {
+                    let numStr = i.toString().padStart(3, '0');
+                    rifaData[numStr] = { estado: "Disponible", nombre: "", apellido: "", valor: "" };
+                }
+                guardarLocal();
+            }
+            document.getElementById('fechaSorteo').value = localStorage.getItem('rifa_fecha') || "";
+            renderGrid();
+            actualizarContadores();
+        }
+
+        function guardarLocal() { localStorage.setItem('rifa_800_data', JSON.stringify(rifaData)); }
+        function guardarFecha() { localStorage.setItem('rifa_fecha', document.getElementById('fechaSorteo').value); }
+
+        function renderGrid() {
+            const grid = document.getElementById('gridNumeros');
+            grid.innerHTML = "";
+            for (let i = 1; i <= 800; i++) {
+                let numStr = i.toString().padStart(3, '0');
+                let slot = document.createElement('div');
+                slot.className = 'numero-slot';
+                slot.innerText = numStr;
+                if(rifaData[numStr].estado === "Vendido") slot.classList.add('vendido');
+                slot.onclick = () => abrirModal(numStr);
+                grid.appendChild(slot);
+            }
+        }
+
+        function actualizarContadores() {
+            let vendidos = Object.values(rifaData).filter(n => n.estado === "Vendido").length;
+            document.getElementById('txtVendidos').innerText = vendidos;
+            document.getElementById('txtDisponibles').innerText = 800 - vendidos;
+        }
+
+        function abrirModal(numero) {
+            numeroSeleccionado = numero;
+            document.getElementById('modalTitulo').innerText = "Número: " + numero;
+            let info = rifaData[numero];
+            document.getElementById('compraNombre').value = info.nombre;
+            document.getElementById('compraApellido').value = info.apellido;
+            document.getElementById('compraValor').value = info.valor;
+            document.getElementById('btnLiberar').style.display = info.estado === "Vendido" ? "block" : "none";
+            document.getElementById('modalVenta').style.display = "flex";
+        }
+
+        function cerrarModal() { document.getElementById('modalVenta').style.display = "none"; }
+
+        function guardarVenta() {
+            let nom = document.getElementById('compraNombre').value.trim();
+            let ape = document.getElementById('compraApellido').value.trim();
+            let val = document.getElementById('compraValor').value.trim();
+            if(!nom || !ape || !val) { alert("Complete todos los campos."); return; }
+            rifaData[numeroSeleccionado] = { estado: "Vendido", nombre: nom, apellido: ape, valor: parseFloat(val) };
+            guardarLocal(); renderGrid(); actualizarContadores(); cerrarModal();
+        }
+
+        function liberarNumero() {
+            if(confirm(`¿Liberar número ${numeroSeleccionado}?`)) {
+                rifaData[numeroSeleccionado] = { estado: "Disponible", nombre: "", apellido: "", valor: "" };
+                guardarLocal(); renderGrid(); actualizarContadores(); cerrarModal();
+            }
+        }
+
+        // Exportación limpia a CSV (Compatible directamente con Excel sin usar librerías de internet)
+        function exportarCSV() {
+            let csvContent = "\uFEFF"; // Previene problemas de acentos en Excel (BOM)
+            csvContent += "Numero;Estado;Nombre;Apellido;Valor Venta\n";
+            
+            for(let i = 1; i <= 800; i++) {
+                let numStr = i.toString().padStart(3, '0');
+                let r = rifaData[numStr];
+                csvContent += `${numStr};${r.estado};${r.nombre};${r.apellido};${r.valor}\n`;
+            }
+            
+            let blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            let link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.setAttribute("download", "Rifa_Reporte.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function realizarSorteo() {
+            let fecha = document.getElementById('fechaSorteo').value;
+            if(!fecha) { alert("Defina una fecha primero."); return; }
+            let vendidos = Object.keys(rifaData).filter(num => rifaData[num].estado === "Vendido");
+            if(vendidos.length === 0) { alert("No hay números vendidos."); return; }
+            
+            let ganador = vendidos[Math.floor(Math.random() * vendidos.length)];
+            let comp = rifaData[ganador];
+            alert(`🎉 GANADOR 🎉\n\nNúmero: ${ganador}\nComprador: ${comp.nombre} ${comp.apellido}`);
+        }
+
+        window.onload = initApp;
+    </script>
+</body>
+</html>
